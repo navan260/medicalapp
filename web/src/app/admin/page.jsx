@@ -8,11 +8,15 @@ import {
   getSigner,
   getProvider,
 } from "@/utils/contract";
+import { db } from "@/utils/firebase";
+import { ref, query, orderByChild, equalTo, get, update } from "firebase/database";
 
 export default function AdminPage() {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const [doctors, setDoctors] = useState([]);
+  const [pendingDoctors, setPendingDoctors] = useState([]);
   const [newDoctorAddress, setNewDoctorAddress] = useState("");
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -59,8 +63,70 @@ export default function AdminPage() {
       const contract = await getContract(signer);
       const allDoctors = await contract.getAllDoctors();
       setDoctors(allDoctors);
+
+      // Load pending doctors from Realtime DB
+      const doctorsRef = ref(db, "doctors");
+      const pendingQuery = query(doctorsRef, orderByChild("status"), equalTo("pending"));
+      const snapshot = await get(pendingQuery);
+
+      const pending = [];
+      if (snapshot.exists()) {
+        snapshot.forEach((childSnapshot) => {
+          pending.push({ id: childSnapshot.key, ...childSnapshot.val() });
+        });
+      }
+      setPendingDoctors(pending);
+
     } catch (err) {
       console.error("Error loading doctors:", err);
+    }
+  };
+
+  const handleVerifyDoctor = async (doctorData) => {
+    try {
+      setError(null);
+      setSuccess(null);
+
+      if (!doctorData.walletAddress) throw new Error("Missing wallet address");
+
+      // 1. Register on Blockchain
+      const signer = await getSigner();
+      const contract = await getContract(signer);
+
+      // Check if already registered on chain to avoid error
+      const isDoc = await contract.isDoctor(doctorData.walletAddress);
+      if (!isDoc) {
+        const tx = await contract.registerDoctor(doctorData.walletAddress);
+        await tx.wait();
+      }
+
+      // 2. Update Realtime DB
+      const doctorRef = ref(db, `doctors/${doctorData.id}`); // id is the wallet address from key
+      await update(doctorRef, {
+        status: "verified"
+      });
+
+      setSuccess(`Doctor ${doctorData.name} verified successfully!`);
+      await loadDoctors();
+
+    } catch (err) {
+      console.error("Verification error:", err);
+      setError(err.message);
+    }
+  };
+
+  const handleRejectDoctor = async (id) => {
+    if (!confirm("Are you sure you want to reject this application?")) return;
+    try {
+      const doctorRef = ref(db, `doctors/${id}`);
+      await update(doctorRef, {
+        status: "rejected"
+      });
+      setSuccess("Application rejected.");
+      await loadDoctors();
+    } catch (err) {
+      console.error("Rejection error:", err);
+      setError(err.message);
     }
   };
 
@@ -232,6 +298,46 @@ export default function AdminPage() {
             {success}
           </div>
         )}
+
+        {/* Pending Approvals */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border mb-6">
+          <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Pending Approvals ({pendingDoctors.length})
+          </h2>
+
+          {pendingDoctors.length === 0 ? (
+            <p className="text-gray-500 text-sm">No pending applications.</p>
+          ) : (
+            <div className="space-y-4">
+              {pendingDoctors.map((doc) => (
+                <div key={doc.id} className="bg-yellow-50 border border-yellow-100 p-4 rounded-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{doc.name}</h3>
+                    <p className="text-sm text-gray-600">{doc.profession} • {doc.hospital}</p>
+                    <p className="text-xs text-gray-500 font-mono mt-1">{doc.walletAddress}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleVerifyDoctor(doc)}
+                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectDoctor(doc.id)}
+                      className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg text-sm font-medium"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Register Doctor */}
         <div className="bg-white rounded-xl p-6 shadow-sm border mb-6">
