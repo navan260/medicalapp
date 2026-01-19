@@ -203,6 +203,31 @@ export default function PatientPage() {
     loadMembers(account);
   };
 
+  const handleDeleteRecord = async (cid, index) => {
+    if (!confirm("Are you sure you want to delete this medical record? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      // 1. Delete from blockchain
+      const signer = await getSigner();
+      const contract = await getContract(signer);
+      const tx = await contract.deleteRecord(index);
+      await tx.wait();
+
+      // 2. Delete metadata from Firebase
+      await remove(ref(db, `users/${account}/records/${cid}`));
+
+      // 3. Reload records
+      await loadRecords(account);
+
+      alert("Record deleted successfully!");
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("Failed to delete record: " + err.message);
+    }
+  };
+
   // --- RENDER HELPERS ---
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
@@ -280,7 +305,7 @@ export default function PatientPage() {
           </div>
 
           {activeView === 'all' && (
-            <AllActivityView records={records} members={members} />
+            <AllActivityView records={records} members={members} onDelete={handleDeleteRecord} />
           )}
 
           {activeView === 'upload' && (
@@ -302,6 +327,7 @@ export default function PatientPage() {
               member={activeMember}
               records={records.filter(r => r.memberId === activeMember.id)}
               onEdit={(data) => handleEditMember(activeMember.id, data)}
+              onDelete={handleDeleteRecord}
             />
           )}
 
@@ -367,7 +393,7 @@ export function SidebarItem({ active, icon, label, onClick }) {
   );
 }
 
-export function AllActivityView({ records, members }) {
+export function AllActivityView({ records, members, onDelete }) {
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-900 mb-6">All Activity</h2>
@@ -399,6 +425,12 @@ export function AllActivityView({ records, members }) {
                     <a href={`https://gateway.pinata.cloud/ipfs/${record.cid}`} target="_blank" className="text-blue-600 text-sm hover:underline flex items-center gap-1">
                       View Document <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                     </a>
+                    <button
+                      onClick={() => onDelete(record.cid, idx)}
+                      className="text-red-600 text-sm hover:underline flex items-center gap-1"
+                    >
+                      Delete <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -636,7 +668,7 @@ export function UploadView({ members, account, onSuccess }) {
   );
 }
 
-export function MemberView({ member, records, onEdit }) {
+export function MemberView({ member, records, onEdit, onDelete }) {
   const [isEditing, setIsEditing] = useState(false);
 
   const handleSave = (e) => {
@@ -735,6 +767,13 @@ export function MemberView({ member, records, onEdit }) {
                 <a href={`https://gateway.pinata.cloud/ipfs/${record.cid}`} target="_blank" className="text-blue-600 hover:bg-blue-50 p-2 rounded-full">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                 </a>
+                <button
+                  onClick={() => onDelete(record.cid, idx)}
+                  className="text-red-600 hover:bg-red-50 p-2 rounded-full"
+                  title="Delete record"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
               </div>
             </div>
           ))
