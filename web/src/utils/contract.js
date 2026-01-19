@@ -26,6 +26,8 @@ export const loadEthers = async () => {
 
 export const getContract = async (signerOrProvider) => {
   const eth = await loadEthers();
+  if (!eth) return null;
+
   // Use NEXT_PUBLIC_ prefix (per vite.config.ts), with deployed address as fallback
   const contractAddress = import.meta.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "0x818FC828b579910ec415d606e4EA34B380cF1d06";
   if (!contractAddress) {
@@ -59,6 +61,8 @@ export const getSigner = async () => {
 };
 
 export const connectWallet = async () => {
+  if (typeof window === "undefined") return null;
+
   if (!window.ethereum) {
     throw new Error(
       "MetaMask is not installed. Please install MetaMask to continue.",

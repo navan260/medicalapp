@@ -5,7 +5,7 @@
 	"scripts": {
 		"dev": "react-router dev",
 		"typecheck": "react-router typegen && tsc --noEmit",
-		"build": "react-router build",
+		"build": "vite build",
 		"start": "react-router-serve ./build/server/index.js"
 	},
 	"dependencies": {
