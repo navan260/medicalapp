@@ -3,7 +3,7 @@ import type { Route } from './+types/not-found';
 import { useNavigate } from 'react-router';
 import { useCallback, useEffect, useState } from 'react';
 
-export async function loader({ params }: Route.LoaderArgs) {
+export async function clientLoader({ params }: Route.LoaderArgs) {
   const matches = await fg('src/**/page.{js,jsx,ts,tsx}');
   return {
     path: `/${params['*']}`,
@@ -30,7 +30,7 @@ interface ParentSitemap {
 export default function CreateDefaultNotFoundPage({
   loaderData,
 }: {
-  loaderData: Awaited<ReturnType<typeof loader>>;
+  loaderData: Awaited<ReturnType<typeof clientLoader>>;
 }) {
   const [siteMap, setSitemap] = useState<ParentSitemap | null>(null);
   const navigate = useNavigate();
