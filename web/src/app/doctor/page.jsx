@@ -101,9 +101,17 @@ export default function DoctorPage() {
 
           if (membersSnap.exists()) {
             const members = membersSnap.val();
-            // Find "Self" strictly.
             const memberList = Object.values(members);
-            const selfMember = memberList.find(m => m.relation === "Self");
+
+            // Find all "Self" profiles
+            const selfMembers = memberList.filter(m => m.relation === "Self");
+
+            // Pick the Self profile with actual data (non-empty name and not "My Profile")
+            // If multiple exist, pick the most recently created one
+            const selfMember = selfMembers
+              .filter(m => m.name && m.name !== "My Profile" && m.name.trim() !== "")
+              .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0]
+              || selfMembers[0]; // Fallback to first if none have data
 
             if (selfMember) {
               displayName = selfMember.name;
